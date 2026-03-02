@@ -212,7 +212,7 @@ class MCPAuditor:
                 ))
             elif classification.category == RiskCategory.DATABASE:
                 result.findings.append(Finding(
-                    severity=Severity.HIGH,
+                    severity=Severity.MEDIUM,
                     category="tool_risk",
                     title=f"Database tool: {tool['name']}",
                     detail=f"Tool can access databases. Matched: {', '.join(classification.matched_patterns)}",

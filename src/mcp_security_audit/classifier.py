@@ -36,25 +36,37 @@ _SHELL_PATTERNS = [
 ]
 
 _FILE_PATTERNS = [
+    # Explicit file operation tool names
     (re.compile(r"\b(read_file|write_file|create_file|delete_file|remove_file)\b"), 1.0),
-    (re.compile(r"\b(file|filesystem|directory|folder|path|mkdir|rmdir|unlink)\b"), 0.8),
-    (re.compile(r"\b(save|load|open|close|read|write|append)\b.*\b(file|disk|path)\b"), 0.9),
-    (re.compile(r"\b(upload|download)\b"), 0.7),
+    (re.compile(r"\b(filesystem|mkdir|rmdir|unlink)\b"), 0.9),
+    # File operations with action context (not just mentioning "file")
+    (re.compile(r"\b(read|write|create|delete|remove|modify|edit)\b.*\b(file|files)\b"), 0.9),
+    (re.compile(r"\b(file|files)\b.*\b(read|write|create|delete|remove|modify|edit)\b"), 0.9),
+    (re.compile(r"\b(save|load|open|close|append)\b.*\b(file|disk|path)\b"), 0.9),
+    (re.compile(r"\b(save|write)\b.*\b(to disk|to file)\b"), 0.9),
+    (re.compile(r"\b(upload|download)\b.*\b(file|files)\b"), 0.8),
     (re.compile(r"\b(trace_save|save_trace|write_log|log_file)\b"), 0.6),
 ]
 
 _DATABASE_PATTERNS = [
-    (re.compile(r"\b(sql|query|database|db|table|insert|update|delete|select|drop|alter)\b"), 0.9),
-    (re.compile(r"\b(postgres|mysql|sqlite|mongo|redis|dynamo|firestore)\b"), 1.0),
-    (re.compile(r"\b(cursor|connection|transaction|commit|rollback)\b"), 0.8),
+    # SQL-specific terms (not ambiguous)
+    (re.compile(r"\b(sql|query|database|db)\b"), 0.9),
+    (re.compile(r"\b(insert|select|drop|alter)\b.*\b(table|row|column|record|into)\b"), 0.9),
+    # Specific database systems
+    (re.compile(r"\b(postgres|mysql|sqlite|mongo|redis|dynamo|firestore|supabase)\b"), 1.0),
+    # Only match "commit/rollback/transaction" with database context
+    (re.compile(r"\b(transaction|rollback)\b"), 0.8),
+    (re.compile(r"\b(commit|cursor|connection)\b.*\b(database|db|sql|transaction)\b"), 0.8),
 ]
 
 _NETWORK_PATTERNS = [
-    (re.compile(r"\b(http|https|request|fetch|api|url|endpoint|webhook)\b"), 0.7),
-    (re.compile(r"\b(socket|tcp|udp|connect|listen|bind|port)\b"), 0.9),
-    (re.compile(r"\b(send|post|get|put|patch|delete)\b.*\b(request|api|http)\b"), 0.8),
-    (re.compile(r"\b(curl|wget|dns|ip|host)\b"), 0.8),
-    (re.compile(r"\b(email|smtp|slack|discord|telegram|notify)\b"), 0.6),
+    (re.compile(r"\b(http|https|url|endpoint|webhook)\b"), 0.7),
+    (re.compile(r"\b(socket|tcp|udp|listen|bind)\b"), 0.9),
+    (re.compile(r"\b(send|post|get|put|patch)\b.*\b(request|api|http)\b"), 0.8),
+    (re.compile(r"\b(curl|wget|dns)\b"), 0.8),
+    (re.compile(r"\b(email|smtp|slack|discord|telegram)\b"), 0.6),
+    (re.compile(r"\bfetch\b.*\b(url|http|web|page|content)\b"), 0.7),
+    (re.compile(r"\b(api|request)\b.*\b(call|send|make)\b"), 0.7),
 ]
 
 CATEGORY_PATTERNS = {
@@ -85,30 +97,45 @@ class ToolClassification:
 def classify_tool(name: str, description: str = "") -> ToolClassification:
     """Classify a single tool by name + description.
 
-    Returns the highest-risk category that matches.
-    Priority: SHELL > FILE > DATABASE > NETWORK > SAFE
+    Uses a scoring approach: each category accumulates a score from its
+    pattern matches. The category with the highest total score wins,
+    but only if it exceeds a minimum threshold.
     """
     text = f"{name} {description}".lower()
-    best_category = RiskCategory.SAFE
-    best_confidence = 0.0
-    all_matched: list[str] = []
 
-    # Check categories in descending risk order
+    category_scores: dict[RiskCategory, float] = {}
+    category_matches: dict[RiskCategory, list[str]] = {}
+
     for category in (RiskCategory.SHELL, RiskCategory.FILE, RiskCategory.DATABASE, RiskCategory.NETWORK):
-        patterns = CATEGORY_PATTERNS[category]
-        for regex, weight in patterns:
+        score = 0.0
+        matches: list[str] = []
+        for regex, weight in CATEGORY_PATTERNS[category]:
             match = regex.search(text)
             if match:
-                all_matched.append(match.group())
-                if category > best_category or (category == best_category and weight > best_confidence):
-                    best_category = category
-                    best_confidence = weight
+                matches.append(match.group())
+                score += weight
+        if matches:
+            category_scores[category] = score
+            category_matches[category] = matches
+
+    if not category_scores:
+        return ToolClassification(tool_name=name, category=RiskCategory.SAFE)
+
+    # Pick the category with the highest score;
+    # on ties, higher risk category wins
+    best_category = max(
+        category_scores,
+        key=lambda c: (category_scores[c], c.value),
+    )
+    all_matched = []
+    for matches in category_matches.values():
+        all_matched.extend(matches)
 
     return ToolClassification(
         tool_name=name,
         category=best_category,
         matched_patterns=all_matched,
-        confidence=best_confidence,
+        confidence=category_scores[best_category],
     )
 
 
