@@ -1,0 +1,451 @@
+[
+  {
+    "name": "mcp-server-fetch (Anthropic)",
+    "grade": "A",
+    "score": 100,
+    "tools": 1,
+    "findings": 0,
+    "high_risk": 0,
+    "error": null,
+    "finding_details": [],
+    "tool_classifications": [
+      {
+        "name": "fetch",
+        "category": "NETWORK"
+      }
+    ]
+  },
+  {
+    "name": "mcp-server-git (Anthropic)",
+    "grade": "A",
+    "score": 100,
+    "tools": 12,
+    "findings": 0,
+    "high_risk": 0,
+    "error": null,
+    "finding_details": [],
+    "tool_classifications": [
+      {
+        "name": "git_status",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_diff_unstaged",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_diff_staged",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_diff",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_commit",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_add",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_reset",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_log",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_create_branch",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_checkout",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_show",
+        "category": "SAFE"
+      },
+      {
+        "name": "git_branch",
+        "category": "SAFE"
+      }
+    ]
+  },
+  {
+    "name": "mcp-server-time (Anthropic)",
+    "grade": "A",
+    "score": 100,
+    "tools": 2,
+    "findings": 0,
+    "high_risk": 0,
+    "error": null,
+    "finding_details": [],
+    "tool_classifications": [
+      {
+        "name": "get_current_time",
+        "category": "SAFE"
+      },
+      {
+        "name": "convert_time",
+        "category": "SAFE"
+      }
+    ]
+  },
+  {
+    "name": "mcp-server-sqlite (Anthropic)",
+    "grade": "C",
+    "score": 73,
+    "tools": 6,
+    "findings": 4,
+    "high_risk": 0,
+    "error": null,
+    "finding_details": [
+      {
+        "severity": "MEDIUM",
+        "title": "Database tool: read_query"
+      },
+      {
+        "severity": "MEDIUM",
+        "title": "Database tool: write_query"
+      },
+      {
+        "severity": "MEDIUM",
+        "title": "Database tool: create_table"
+      },
+      {
+        "severity": "MEDIUM",
+        "title": "Database tool: list_tables"
+      }
+    ],
+    "tool_classifications": [
+      {
+        "name": "read_query",
+        "category": "DATABASE"
+      },
+      {
+        "name": "write_query",
+        "category": "DATABASE"
+      },
+      {
+        "name": "create_table",
+        "category": "DATABASE"
+      },
+      {
+        "name": "list_tables",
+        "category": "DATABASE"
+      },
+      {
+        "name": "describe_table",
+        "category": "SAFE"
+      },
+      {
+        "name": "append_insight",
+        "category": "SAFE"
+      }
+    ]
+  },
+  {
+    "name": "agent-safety-mcp (LuciferForge)",
+    "grade": "A",
+    "score": 90,
+    "tools": 12,
+    "findings": 1,
+    "high_risk": 1,
+    "error": null,
+    "finding_details": [
+      {
+        "severity": "HIGH",
+        "title": "File system tool: trace_save"
+      }
+    ],
+    "tool_classifications": [
+      {
+        "name": "cost_guard_configure",
+        "category": "SAFE"
+      },
+      {
+        "name": "cost_guard_status",
+        "category": "SAFE"
+      },
+      {
+        "name": "cost_guard_check",
+        "category": "SAFE"
+      },
+      {
+        "name": "cost_guard_record",
+        "category": "SAFE"
+      },
+      {
+        "name": "cost_guard_models",
+        "category": "SAFE"
+      },
+      {
+        "name": "injection_scan",
+        "category": "SAFE"
+      },
+      {
+        "name": "injection_check",
+        "category": "SAFE"
+      },
+      {
+        "name": "injection_patterns",
+        "category": "SAFE"
+      },
+      {
+        "name": "trace_start",
+        "category": "SAFE"
+      },
+      {
+        "name": "trace_step",
+        "category": "SAFE"
+      },
+      {
+        "name": "trace_summary",
+        "category": "SAFE"
+      },
+      {
+        "name": "trace_save",
+        "category": "FILE"
+      }
+    ]
+  },
+  {
+    "name": "server-filesystem (Anthropic)",
+    "grade": "F",
+    "score": 7,
+    "tools": 14,
+    "findings": 7,
+    "high_risk": 6,
+    "error": null,
+    "finding_details": [
+      {
+        "severity": "HIGH",
+        "title": "File system tool: read_file"
+      },
+      {
+        "severity": "HIGH",
+        "title": "File system tool: read_text_file"
+      },
+      {
+        "severity": "HIGH",
+        "title": "File system tool: read_media_file"
+      },
+      {
+        "severity": "HIGH",
+        "title": "File system tool: read_multiple_files"
+      },
+      {
+        "severity": "HIGH",
+        "title": "File system tool: write_file"
+      },
+      {
+        "severity": "HIGH",
+        "title": "File system tool: edit_file"
+      },
+      {
+        "severity": "MEDIUM",
+        "title": "Injection pattern in tool description: read_media_file"
+      }
+    ],
+    "tool_classifications": [
+      {
+        "name": "read_file",
+        "category": "FILE"
+      },
+      {
+        "name": "read_text_file",
+        "category": "FILE"
+      },
+      {
+        "name": "read_media_file",
+        "category": "FILE"
+      },
+      {
+        "name": "read_multiple_files",
+        "category": "FILE"
+      },
+      {
+        "name": "write_file",
+        "category": "FILE"
+      },
+      {
+        "name": "edit_file",
+        "category": "FILE"
+      },
+      {
+        "name": "create_directory",
+        "category": "SAFE"
+      },
+      {
+        "name": "list_directory",
+        "category": "SAFE"
+      },
+      {
+        "name": "list_directory_with_sizes",
+        "category": "SAFE"
+      },
+      {
+        "name": "directory_tree",
+        "category": "SAFE"
+      },
+      {
+        "name": "move_file",
+        "category": "SAFE"
+      },
+      {
+        "name": "search_files",
+        "category": "SAFE"
+      },
+      {
+        "name": "get_file_info",
+        "category": "SAFE"
+      },
+      {
+        "name": "list_allowed_directories",
+        "category": "SAFE"
+      }
+    ]
+  },
+  {
+    "name": "server-memory (Anthropic)",
+    "grade": "A",
+    "score": 97,
+    "tools": 9,
+    "findings": 1,
+    "high_risk": 0,
+    "error": null,
+    "finding_details": [
+      {
+        "severity": "MEDIUM",
+        "title": "Database tool: search_nodes"
+      }
+    ],
+    "tool_classifications": [
+      {
+        "name": "create_entities",
+        "category": "SAFE"
+      },
+      {
+        "name": "create_relations",
+        "category": "SAFE"
+      },
+      {
+        "name": "add_observations",
+        "category": "SAFE"
+      },
+      {
+        "name": "delete_entities",
+        "category": "SAFE"
+      },
+      {
+        "name": "delete_observations",
+        "category": "SAFE"
+      },
+      {
+        "name": "delete_relations",
+        "category": "SAFE"
+      },
+      {
+        "name": "read_graph",
+        "category": "SAFE"
+      },
+      {
+        "name": "search_nodes",
+        "category": "DATABASE"
+      },
+      {
+        "name": "open_nodes",
+        "category": "SAFE"
+      }
+    ]
+  },
+  {
+    "name": "server-sequential-thinking (Anthropic)",
+    "grade": "A",
+    "score": 100,
+    "tools": 1,
+    "findings": 0,
+    "high_risk": 0,
+    "error": null,
+    "finding_details": [],
+    "tool_classifications": [
+      {
+        "name": "sequentialthinking",
+        "category": "SAFE"
+      }
+    ]
+  },
+  {
+    "name": "server-everything (Anthropic)",
+    "grade": "A",
+    "score": 97,
+    "tools": 13,
+    "findings": 1,
+    "high_risk": 0,
+    "error": null,
+    "finding_details": [
+      {
+        "severity": "MEDIUM",
+        "title": "Database tool: simulate-research-query"
+      }
+    ],
+    "tool_classifications": [
+      {
+        "name": "echo",
+        "category": "SAFE"
+      },
+      {
+        "name": "get-annotated-message",
+        "category": "SAFE"
+      },
+      {
+        "name": "get-env",
+        "category": "SAFE"
+      },
+      {
+        "name": "get-resource-links",
+        "category": "SAFE"
+      },
+      {
+        "name": "get-resource-reference",
+        "category": "SAFE"
+      },
+      {
+        "name": "get-structured-content",
+        "category": "SAFE"
+      },
+      {
+        "name": "get-sum",
+        "category": "SAFE"
+      },
+      {
+        "name": "get-tiny-image",
+        "category": "SAFE"
+      },
+      {
+        "name": "gzip-file-as-resource",
+        "category": "SAFE"
+      },
+      {
+        "name": "toggle-simulated-logging",
+        "category": "SAFE"
+      },
+      {
+        "name": "toggle-subscriber-updates",
+        "category": "SAFE"
+      },
+      {
+        "name": "trigger-long-running-operation",
+        "category": "SAFE"
+      },
+      {
+        "name": "simulate-research-query",
+        "category": "DATABASE"
+      }
+    ]
+  }
+]

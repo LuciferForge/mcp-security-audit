@@ -30,7 +30,9 @@ _SHELL_PATTERNS = [
     (re.compile(r"\b(shell|bash|sh|cmd|subprocess|system|popen|spawn)\b"), 1.0),
     (re.compile(r"\b(exec|execute|run)\b.*\b(command|script|process|program|binary)\b"), 1.0),
     (re.compile(r"\b(command|script|process|program|binary)\b.*\b(exec|execute|run)\b"), 1.0),
-    (re.compile(r"\b(terminal|console|process|kill|signal)\b"), 0.8),
+    (re.compile(r"\b(terminal|console)\b"), 0.8),
+    (re.compile(r"\b(kill|signal)\b.*\b(process|pid|proc)\b"), 0.8),
+    (re.compile(r"\b(child|system|spawn|fork)\b.*\bprocess\b"), 0.8),
     (re.compile(r"\bos\.system\b|os\.popen\b|subprocess\b"), 1.0),
     (re.compile(r"\bexecute_command\b|run_command\b|exec_cmd\b"), 1.0),
 ]
@@ -112,7 +114,11 @@ def classify_tool(name: str, description: str = "") -> ToolClassification:
         for regex, weight in CATEGORY_PATTERNS[category]:
             match = regex.search(text)
             if match:
-                matches.append(match.group())
+                matched_text = match.group()
+                # Truncate long matches to keep output clean
+                if len(matched_text) > 40:
+                    matched_text = matched_text[:40] + "..."
+                matches.append(matched_text)
                 score += weight
         if matches:
             category_scores[category] = score
