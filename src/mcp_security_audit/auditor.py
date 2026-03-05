@@ -1,8 +1,9 @@
-"""Core audit engine — connects to an MCP server, enumerates and audits everything."""
+"""Core audit engine — connects to an MCP server, audits security hygiene."""
 
 from __future__ import annotations
 
 import asyncio
+import re
 import shlex
 from dataclasses import dataclass, field
 from enum import Enum
@@ -12,7 +13,10 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from prompt_shield import PromptScanner
 
-from .classifier import RiskCategory, ToolClassification, classify_tool
+from .classifier import (
+    RiskCategory, ToolClassification, classify_tool,
+    infer_server_purpose, is_purpose_aligned,
+)
 
 
 class Severity(str, Enum):
@@ -22,14 +26,6 @@ class Severity(str, Enum):
     LOW = "LOW"
     INFO = "INFO"
 
-
-SEVERITY_DEDUCTIONS = {
-    Severity.CRITICAL: 25,
-    Severity.HIGH: 15,
-    Severity.MEDIUM: 8,
-    Severity.LOW: 3,
-    Severity.INFO: 0,
-}
 
 # Sensitive resource URI patterns
 SENSITIVE_PATTERNS = [
@@ -57,6 +53,21 @@ class Finding:
 
 
 @dataclass
+class HygieneScores:
+    """Breakdown of hygiene scores by category."""
+    documentation: float = 0.0       # out of 25
+    schema_rigor: float = 0.0        # out of 25
+    injection_safety: float = 0.0    # out of 25
+    scope_signals: float = 0.0       # out of 15
+    metadata: float = 0.0            # out of 10
+
+    @property
+    def total(self) -> int:
+        raw = self.documentation + self.schema_rigor + self.injection_safety + self.scope_signals + self.metadata
+        return max(0, min(100, round(raw)))
+
+
+@dataclass
 class AuditResult:
     """Complete audit result for a server."""
     server_command: str
@@ -65,10 +76,16 @@ class AuditResult:
     prompts: list[dict] = field(default_factory=list)
     classifications: list[ToolClassification] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
-    score: int = 100
-    grade: str = "A"
+    hygiene: HygieneScores = field(default_factory=HygieneScores)
+    risk_profile: str = "SAFE"  # Highest risk category across all tools
+    server_purpose: set = field(default_factory=set)  # Expected risk categories
+    purpose_aligned: bool = True  # All high-risk tools match server purpose
+    score: int = 0
+    grade: str = "F"
     live_test_results: list[dict] = field(default_factory=list)
     error: str = ""
+    server_name: str = ""
+    server_version: str = ""
 
     @property
     def tool_count(self) -> int:
@@ -79,35 +96,20 @@ class AuditResult:
         return [c for c in self.classifications if c.is_high_risk]
 
 
-def _calculate_score(findings: list[Finding], documented_count: int, total_count: int) -> tuple[int, str]:
-    """Calculate 0-100 score and letter grade."""
-    score = 100
-    for f in findings:
-        score -= SEVERITY_DEDUCTIONS.get(f.severity, 0)
-
-    # Bonus for documented tools (max +5)
-    if total_count > 0:
-        doc_ratio = documented_count / total_count
-        score += min(int(doc_ratio * 5), 5)
-
-    score = max(0, min(100, score))
-
+def _grade_from_score(score: int) -> str:
     if score >= 90:
-        grade = "A"
-    elif score >= 75:
-        grade = "B"
-    elif score >= 60:
-        grade = "C"
-    elif score >= 40:
-        grade = "D"
-    else:
-        grade = "F"
-
-    return score, grade
+        return "A"
+    elif score >= 80:
+        return "B"
+    elif score >= 65:
+        return "C"
+    elif score >= 50:
+        return "D"
+    return "F"
 
 
 class MCPAuditor:
-    """Connects to an MCP server and audits it."""
+    """Connects to an MCP server and audits its security hygiene."""
 
     def __init__(
         self,
@@ -132,11 +134,50 @@ class MCPAuditor:
             result.grade = "F"
             return result
 
-        # Calculate final score
-        documented = sum(1 for t in result.tools if t.get("description"))
-        result.score, result.grade = _calculate_score(
-            result.findings, documented, len(result.tools)
+        # Infer server purpose BEFORE scoring
+        result.server_purpose = infer_server_purpose(
+            result.server_name, result.server_command, result.classifications,
         )
+
+        # Check if all high-risk tools are purpose-aligned
+        misaligned = [
+            c for c in result.classifications
+            if c.is_high_risk and not is_purpose_aligned(c, result.server_purpose)
+        ]
+        result.purpose_aligned = len(misaligned) == 0
+
+        # Calculate hygiene score
+        self._score_documentation(result)
+        self._score_schema_rigor(result)
+        self._score_injection_safety(result)
+        self._score_scope_signals(result)
+        self._score_metadata(result)
+
+        result.score = result.hygiene.total
+        result.grade = _grade_from_score(result.score)
+
+        # Determine overall risk profile
+        if result.classifications:
+            max_risk = max(c.category for c in result.classifications)
+            from .classifier import CATEGORY_LABELS
+            label = CATEGORY_LABELS.get(max_risk, "SAFE")
+            if result.purpose_aligned and max_risk >= RiskCategory.FILE:
+                label += " (purpose-aligned)"
+            result.risk_profile = label
+
+        # Generate findings for misaligned tools (unexpected capabilities)
+        for c in misaligned:
+            result.findings.append(Finding(
+                severity=Severity.HIGH,
+                category="scope",
+                title=f"Unexpected {c.label.lower()} capability: {c.tool_name}",
+                detail=(
+                    f"Tool classified as {c.label} but server purpose "
+                    f"does not include {c.label.lower()} operations. "
+                    f"Matched: {', '.join(c.matched_patterns[:3])}"
+                ),
+                tool_name=c.tool_name,
+            ))
 
         return result
 
@@ -150,14 +191,15 @@ class MCPAuditor:
 
         async with stdio_client(server_params) as (read, write):
             async with ClientSession(read, write) as session:
-                await session.initialize()
+                init_result = await session.initialize()
+
+                # Capture server metadata
+                if hasattr(init_result, 'serverInfo') and init_result.serverInfo:
+                    result.server_name = getattr(init_result.serverInfo, 'name', '') or ''
+                    result.server_version = getattr(init_result.serverInfo, 'version', '') or ''
+
                 await self._enumerate(session, result)
                 self._classify_tools(result)
-                self._scan_descriptions(result)
-                self._check_resources(result)
-                self._check_risk_ratio(result)
-                self._check_undocumented(result)
-                self._check_tool_count(result)
 
                 if self.run_live_tests:
                     await self._live_injection_tests(session, result)
@@ -177,7 +219,7 @@ class MCPAuditor:
                 for r in resources_resp.resources
             ]
         except Exception:
-            pass  # Server may not support resources
+            pass
 
         try:
             prompts_resp = await session.list_prompts()
@@ -186,129 +228,326 @@ class MCPAuditor:
                 for p in prompts_resp.prompts
             ]
         except Exception:
-            pass  # Server may not support prompts
+            pass
 
     def _classify_tools(self, result: AuditResult) -> None:
-        """Classify each tool by risk category."""
+        """Classify each tool by risk category (for the risk profile, not scoring)."""
         for tool in result.tools:
             classification = classify_tool(tool["name"], tool["description"])
             result.classifications.append(classification)
 
-            if classification.category == RiskCategory.SHELL:
-                result.findings.append(Finding(
-                    severity=Severity.CRITICAL,
-                    category="tool_risk",
-                    title=f"Shell execution tool: {tool['name']}",
-                    detail=f"Tool can execute shell commands. Matched: {', '.join(classification.matched_patterns)}",
-                    tool_name=tool["name"],
-                ))
-            elif classification.category == RiskCategory.FILE:
-                result.findings.append(Finding(
-                    severity=Severity.HIGH,
-                    category="tool_risk",
-                    title=f"File system tool: {tool['name']}",
-                    detail=f"Tool can access the file system. Matched: {', '.join(classification.matched_patterns)}",
-                    tool_name=tool["name"],
-                ))
-            elif classification.category == RiskCategory.DATABASE:
-                result.findings.append(Finding(
-                    severity=Severity.MEDIUM,
-                    category="tool_risk",
-                    title=f"Database tool: {tool['name']}",
-                    detail=f"Tool can access databases. Matched: {', '.join(classification.matched_patterns)}",
-                    tool_name=tool["name"],
-                ))
+    # =========================================================================
+    # HYGIENE SCORING — 5 categories, 100 points total
+    # =========================================================================
 
-    def _scan_descriptions(self, result: AuditResult) -> None:
-        """Scan tool and prompt descriptions for injection patterns."""
+    def _score_documentation(self, result: AuditResult) -> None:
+        """Category A: Documentation completeness (25 points)."""
+        if not result.tools:
+            result.hygiene.documentation = 25  # No tools = nothing to document
+            return
+
+        total_tools = len(result.tools)
+
+        # A1: Tool descriptions present (8 pts)
+        with_desc = sum(1 for t in result.tools if t.get("description"))
+        a1 = (with_desc / total_tools) * 8
+
+        # A2: Descriptions are substantive >= 20 chars (7 pts)
+        substantive = sum(1 for t in result.tools if len(t.get("description", "")) >= 20)
+        a2 = (substantive / total_tools) * 7
+
+        # A3: Parameters have descriptions in schema (5 pts)
+        total_params = 0
+        params_with_desc = 0
+        for t in result.tools:
+            schema = t.get("input_schema", {})
+            props = schema.get("properties", {})
+            for pname, pdef in props.items():
+                total_params += 1
+                if pdef.get("description"):
+                    params_with_desc += 1
+        a3 = (params_with_desc / total_params * 5) if total_params > 0 else 5
+
+        # A4: Resource descriptions (3 pts)
+        if result.resources:
+            res_with_desc = sum(1 for r in result.resources if r.get("description"))
+            a4 = (res_with_desc / len(result.resources)) * 3
+        else:
+            a4 = 3  # No resources = full marks
+
+        # A5: Prompt descriptions (2 pts)
+        if result.prompts:
+            pr_with_desc = sum(1 for p in result.prompts if p.get("description"))
+            a5 = (pr_with_desc / len(result.prompts)) * 2
+        else:
+            a5 = 2  # No prompts = full marks
+
+        score = a1 + a2 + a3 + a4 + a5
+        result.hygiene.documentation = min(25, score)
+
+        # Generate findings for undocumented tools
+        undocumented = [t["name"] for t in result.tools if not t.get("description")]
+        if undocumented:
+            result.findings.append(Finding(
+                severity=Severity.MEDIUM if len(undocumented) > 3 else Severity.LOW,
+                category="documentation",
+                title=f"{len(undocumented)} undocumented tool(s)",
+                detail=f"Tools without descriptions: {undocumented[:5]}",
+            ))
+
+    def _score_schema_rigor(self, result: AuditResult) -> None:
+        """Category B: Input schema rigor (25 points)."""
+        if not result.tools:
+            result.hygiene.schema_rigor = 25
+            return
+
+        total_tools = len(result.tools)
+
+        # B1: Tools have input schemas (8 pts)
+        with_schema = sum(1 for t in result.tools if t.get("input_schema", {}).get("properties"))
+        # Tools with no params don't need schemas
+        tools_needing_schema = sum(
+            1 for t in result.tools
+            if t.get("input_schema", {}).get("properties") or t.get("input_schema", {}).get("required")
+        )
+        tools_without_params = total_tools - tools_needing_schema
+        b1 = ((with_schema + tools_without_params) / total_tools) * 8 if total_tools else 8
+
+        # B2: No unconstrained object params (6 pts)
+        total_params = 0
+        unconstrained_objects = 0
+        for t in result.tools:
+            props = t.get("input_schema", {}).get("properties", {})
+            for pdef in props.values():
+                total_params += 1
+                if pdef.get("type") == "object" and not pdef.get("properties"):
+                    unconstrained_objects += 1
+        b2 = max(0, 6 - (unconstrained_objects / max(total_params, 1)) * 6)
+
+        # B3: String params use constraints (5 pts)
+        total_strings = 0
+        constrained_strings = 0
+        for t in result.tools:
+            props = t.get("input_schema", {}).get("properties", {})
+            for pdef in props.values():
+                if pdef.get("type") == "string":
+                    total_strings += 1
+                    if any(pdef.get(k) for k in ("enum", "pattern", "maxLength", "format")):
+                        constrained_strings += 1
+        b3 = (constrained_strings / total_strings * 5) if total_strings > 0 else 5
+
+        # B4: No additionalProperties: true (4 pts)
+        schemas_with_additional = 0
+        for t in result.tools:
+            schema = t.get("input_schema", {})
+            if schema.get("additionalProperties") is True:
+                schemas_with_additional += 1
+        b4 = max(0, 4 - (schemas_with_additional / max(total_tools, 1)) * 4)
+
+        # B5: Required fields declared (2 pts)
+        tools_with_params = sum(1 for t in result.tools if t.get("input_schema", {}).get("properties"))
+        tools_with_required = sum(1 for t in result.tools if t.get("input_schema", {}).get("required"))
+        b5 = (tools_with_required / tools_with_params * 2) if tools_with_params > 0 else 2
+
+        score = b1 + b2 + b3 + b4 + b5
+        result.hygiene.schema_rigor = min(25, score)
+
+        # Findings
+        if unconstrained_objects > 0:
+            result.findings.append(Finding(
+                severity=Severity.MEDIUM,
+                category="schema",
+                title=f"{unconstrained_objects} unconstrained object parameter(s)",
+                detail="Parameters typed as bare 'object' with no properties defined accept arbitrary input",
+            ))
+        if total_strings > 0 and constrained_strings == 0:
+            result.findings.append(Finding(
+                severity=Severity.LOW,
+                category="schema",
+                title="No string parameters use constraints",
+                detail=f"{total_strings} string params lack enum, pattern, maxLength, or format",
+            ))
+
+    def _score_injection_safety(self, result: AuditResult) -> None:
+        """Category C: Injection & prompt safety (25 points)."""
+        # C1: No injection patterns in tool descriptions (12 pts)
+        tool_injection_count = 0
         for tool in result.tools:
             desc = tool.get("description", "")
             if not desc:
                 continue
             scan = self._scanner.scan(desc)
             if not scan.is_safe:
+                tool_injection_count += 1
                 result.findings.append(Finding(
                     severity=Severity.CRITICAL if scan.severity == "CRITICAL" else
-                             Severity.HIGH if scan.severity == "HIGH" else
-                             Severity.MEDIUM,
+                             Severity.HIGH if scan.severity == "HIGH" else Severity.MEDIUM,
                     category="injection",
                     title=f"Injection pattern in tool description: {tool['name']}",
                     detail=f"Severity {scan.severity}, score {scan.risk_score}. "
                            f"Patterns: {[m['name'] for m in scan.matches]}",
                     tool_name=tool["name"],
                 ))
+        c1 = max(0, 12 - min(tool_injection_count, 4) * 3)
 
+        # C2: No injection patterns in prompt descriptions (5 pts)
+        prompt_injection_count = 0
         for prompt in result.prompts:
             desc = prompt.get("description", "")
             if not desc:
                 continue
             scan = self._scanner.scan(desc)
             if not scan.is_safe:
+                prompt_injection_count += 1
                 result.findings.append(Finding(
                     severity=Severity.HIGH,
                     category="injection",
                     title=f"Injection pattern in prompt: {prompt['name']}",
-                    detail=f"Severity {scan.severity}, score {scan.risk_score}. "
-                           f"Patterns: {[m['name'] for m in scan.matches]}",
+                    detail=f"Severity {scan.severity}, score {scan.risk_score}",
                 ))
+        c2 = max(0, 5 - min(prompt_injection_count, 5))
 
-    def _check_resources(self, result: AuditResult) -> None:
-        """Check resource URIs for sensitive paths."""
+        # C3: No injection in resource URIs (4 pts)
+        resource_injection_count = 0
+        for resource in result.resources:
+            uri = resource.get("uri", "")
+            scan = self._scanner.scan(uri)
+            if not scan.is_safe:
+                resource_injection_count += 1
+        c3 = max(0, 4 - min(resource_injection_count, 4))
+
+        # C4: No encoded/obfuscated content in descriptions (4 pts)
+        has_encoded = False
+        for tool in result.tools:
+            desc = tool.get("description", "")
+            if re.search(r'(?:base64|\\x[0-9a-f]{2}|\\u[0-9a-f]{4})', desc, re.I):
+                has_encoded = True
+                break
+        c4 = 0 if has_encoded else 4
+
+        result.hygiene.injection_safety = c1 + c2 + c3 + c4
+
+    def _score_scope_signals(self, result: AuditResult) -> None:
+        """Category D: Scope & least privilege signals (15 points)."""
+        # D1: No wildcard resource URIs (5 pts)
+        wildcard_count = 0
+        for resource in result.resources:
+            uri = resource.get("uri", "")
+            if "**" in uri or uri.endswith("/*") or uri.endswith("/{path}"):
+                wildcard_count += 1
+        d1 = max(0, 5 - wildcard_count * 2.5)
+
+        # D2: Destructive tools have clear descriptions (4 pts)
+        destructive_names = re.compile(r'\b(write|delete|remove|drop|execute|run|create|update|put|post)\b', re.I)
+        destructive_tools = [t for t in result.tools if destructive_names.search(t["name"])]
+        if destructive_tools:
+            described_destructive = sum(
+                1 for t in destructive_tools
+                if len(t.get("description", "")) >= 20
+            )
+            d2 = (described_destructive / len(destructive_tools)) * 4
+        else:
+            d2 = 4
+
+        # D3: Tool count proportionality (3 pts)
+        count = len(result.tools)
+        if count <= 30:
+            d3 = 3
+        elif count <= 50:
+            d3 = 2
+        elif count <= 75:
+            d3 = 1
+            result.findings.append(Finding(
+                severity=Severity.LOW,
+                category="scope",
+                title=f"Large tool count: {count}",
+                detail="Servers with 50+ tools have a large attack surface",
+            ))
+        else:
+            d3 = 0
+            result.findings.append(Finding(
+                severity=Severity.MEDIUM,
+                category="scope",
+                title=f"Very large tool count: {count}",
+                detail="Servers with 75+ tools have a very large attack surface",
+            ))
+
+        # D4: Shell/eval tools with unconstrained input (3 pts)
+        shell_names = re.compile(r'\b(exec|eval|shell|run_command|execute)\b', re.I)
+        dangerous_unconstrained = 0
+        for t in result.tools:
+            if shell_names.search(t["name"]):
+                props = t.get("input_schema", {}).get("properties", {})
+                for pdef in props.values():
+                    if pdef.get("type") == "string" and not any(
+                        pdef.get(k) for k in ("enum", "pattern", "maxLength")
+                    ):
+                        dangerous_unconstrained += 1
+                        result.findings.append(Finding(
+                            severity=Severity.CRITICAL,
+                            category="scope",
+                            title=f"Shell/eval tool with unconstrained input: {t['name']}",
+                            detail="Tool name suggests command execution and accepts freeform string input",
+                            tool_name=t["name"],
+                        ))
+                        break
+        d4 = 3 if dangerous_unconstrained == 0 else 0
+
+        # Check sensitive resource URIs
         for resource in result.resources:
             uri = resource.get("uri", "").lower()
             for pattern in SENSITIVE_PATTERNS:
                 if pattern in uri:
                     result.findings.append(Finding(
                         severity=Severity.HIGH,
-                        category="resource",
+                        category="scope",
                         title=f"Sensitive resource URI: {resource['uri']}",
                         detail=f"Resource URI contains sensitive pattern '{pattern}'",
                     ))
                     break
 
-    def _check_risk_ratio(self, result: AuditResult) -> None:
-        """Check if too many tools are high-risk."""
-        if not result.classifications:
-            return
-        high_risk = sum(1 for c in result.classifications if c.is_high_risk)
-        ratio = high_risk / len(result.classifications)
-        if ratio > 0.5:
-            result.findings.append(Finding(
-                severity=Severity.MEDIUM,
-                category="configuration",
-                title="High-risk tool ratio exceeds 50%",
-                detail=f"{high_risk}/{len(result.classifications)} tools are FILE or SHELL level",
-            ))
+        result.hygiene.scope_signals = d1 + d2 + d3 + d4
 
-    def _check_undocumented(self, result: AuditResult) -> None:
-        """Check for tools without descriptions."""
-        undocumented = [t for t in result.tools if not t.get("description")]
-        if undocumented:
-            severity = Severity.MEDIUM if len(undocumented) > 3 else Severity.LOW
-            result.findings.append(Finding(
-                severity=severity,
-                category="configuration",
-                title=f"{len(undocumented)} undocumented tool(s)",
-                detail=f"Tools without descriptions: {[t['name'] for t in undocumented]}",
-            ))
+    def _score_metadata(self, result: AuditResult) -> None:
+        """Category E: Metadata hygiene (10 points)."""
+        # E1: Server provides a name (2 pts)
+        e1 = 2 if result.server_name else 0
 
-    def _check_tool_count(self, result: AuditResult) -> None:
-        """Flag large tool counts (bigger attack surface)."""
-        count = len(result.tools)
-        if count > 50:
-            result.findings.append(Finding(
-                severity=Severity.MEDIUM,
-                category="configuration",
-                title=f"Very large tool count: {count}",
-                detail="Servers with 50+ tools have a large attack surface",
-            ))
-        elif count > 20:
+        # E2: Server provides a version (2 pts)
+        e2 = 2 if result.server_version else 0
+
+        # E3: No duplicate tool names (3 pts)
+        tool_names = [t["name"] for t in result.tools]
+        e3 = 3 if len(tool_names) == len(set(tool_names)) else 0
+        if e3 == 0:
             result.findings.append(Finding(
                 severity=Severity.LOW,
-                category="configuration",
-                title=f"Large tool count: {count}",
-                detail="Servers with 20+ tools have an increased attack surface",
+                category="metadata",
+                title="Duplicate tool names detected",
+                detail="Multiple tools share the same name",
             ))
+
+        # E4: Consistent naming convention (3 pts)
+        if len(tool_names) <= 1:
+            e4 = 3
+        else:
+            snake = sum(1 for n in tool_names if "_" in n and n == n.lower())
+            camel = sum(1 for n in tool_names if not "_" in n and n != n.lower())
+            kebab = sum(1 for n in tool_names if "-" in n)
+            plain = sum(1 for n in tool_names if "_" not in n and "-" not in n and n == n.lower())
+            dominant = max(snake, camel, kebab, plain)
+            ratio = dominant / len(tool_names)
+            e4 = 3 if ratio >= 0.8 else 1
+
+        if not result.server_name:
+            result.findings.append(Finding(
+                severity=Severity.LOW,
+                category="metadata",
+                title="Server does not provide a name",
+                detail="Server initialization did not include a server name",
+            ))
+
+        result.hygiene.metadata = e1 + e2 + e3 + e4
 
     async def _live_injection_tests(self, session: ClientSession, result: AuditResult) -> None:
         """Send injection payloads to tools with string parameters."""
@@ -319,7 +558,7 @@ class MCPAuditor:
             for param_name, param_def in props.items():
                 if param_def.get("type") == "string":
                     string_tools.append((tool["name"], param_name))
-                    break  # One param per tool is enough
+                    break
 
         for tool_name, param_name in string_tools:
             for payload in INJECTION_PAYLOADS:
@@ -328,7 +567,6 @@ class MCPAuditor:
                         session.call_tool(tool_name, {param_name: payload}),
                         timeout=10.0,
                     )
-                    # Check if the response looks like it executed the injection
                     resp_text = str(resp)
                     scan = self._scanner.scan(resp_text)
                     test_result = {
@@ -345,8 +583,7 @@ class MCPAuditor:
                             severity=Severity.CRITICAL,
                             category="live_test",
                             title=f"Live injection test flagged: {tool_name}",
-                            detail=f"Payload echoed back or triggered suspicious response. "
-                                   f"Param: {param_name}",
+                            detail=f"Payload triggered suspicious response. Param: {param_name}",
                             tool_name=tool_name,
                         ))
                 except asyncio.TimeoutError:
@@ -358,4 +595,4 @@ class MCPAuditor:
                         "response_flagged": False,
                     })
                 except Exception:
-                    pass  # Tool may reject the input — that's fine
+                    pass

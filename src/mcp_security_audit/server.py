@@ -58,11 +58,12 @@ async def audit_quick_scan(server_command: str) -> dict:
     result = await auditor.run()
     report = generate_json_report(result)
     return {
-        "score": report["score"],
+        "risk_profile": report["risk_profile"],
+        "hygiene_score": report["hygiene_score"],
         "grade": report["grade"],
         "tool_count": report["summary"]["tool_count"],
-        "high_risk_tools": report["summary"]["high_risk_tools"],
         "finding_count": report["summary"]["finding_count"],
+        "hygiene_breakdown": report["hygiene_breakdown"],
         "top_findings": [
             {"severity": f["severity"], "title": f["title"]}
             for f in report["findings"][:5]

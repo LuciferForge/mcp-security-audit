@@ -151,3 +151,69 @@ def classify_tools(tools: list[dict]) -> list[ToolClassification]:
         classify_tool(t.get("name", ""), t.get("description", ""))
         for t in tools
     ]
+
+
+# ── Purpose inference ────────────────────────────────────────────────────────
+
+# Keywords in server name that indicate expected capabilities
+_PURPOSE_KEYWORDS: dict[RiskCategory, list[str]] = {
+    RiskCategory.FILE: [
+        "filesystem", "file", "fs", "disk", "storage", "directory", "folder",
+    ],
+    RiskCategory.DATABASE: [
+        "database", "db", "sql", "sqlite", "postgres", "mysql", "mongo",
+        "redis", "dynamo", "firestore", "supabase", "prisma",
+    ],
+    RiskCategory.SHELL: [
+        "shell", "terminal", "bash", "command", "exec", "process", "cli",
+    ],
+    RiskCategory.NETWORK: [
+        "fetch", "http", "api", "web", "network", "webhook", "proxy",
+        "request", "client", "rest", "graphql",
+    ],
+}
+
+
+def infer_server_purpose(
+    server_name: str,
+    server_command: str,
+    classifications: list[ToolClassification],
+) -> set[RiskCategory]:
+    """Infer what risk categories are expected for this server.
+
+    Uses two signals:
+    1. Server name/command keywords (strong signal)
+    2. Tool composition — if ≥30% of tools fall in one risk category,
+       that category is likely the server's purpose (moderate signal)
+    """
+    expected: set[RiskCategory] = set()
+    text = f"{server_name} {server_command}".lower()
+
+    # 1. Name-based inference
+    for category, keywords in _PURPOSE_KEYWORDS.items():
+        if any(kw in text for kw in keywords):
+            expected.add(category)
+
+    # 2. Composition-based inference
+    if classifications:
+        from collections import Counter
+        cats = Counter(
+            c.category for c in classifications
+            if c.category != RiskCategory.SAFE
+        )
+        total = len(classifications)
+        for cat, count in cats.items():
+            if count / total >= 0.3:
+                expected.add(cat)
+
+    return expected
+
+
+def is_purpose_aligned(
+    classification: ToolClassification,
+    server_purpose: set[RiskCategory],
+) -> bool:
+    """Check if a tool's risk category matches the server's stated purpose."""
+    if classification.category == RiskCategory.SAFE:
+        return True
+    return classification.category in server_purpose
