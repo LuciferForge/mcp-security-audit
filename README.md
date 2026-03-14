@@ -83,7 +83,7 @@ claude mcp add mcp-security-audit -- uvx mcp-security-audit
 ## What It Checks
 
 1. **Tool risk classification** — categorizes every tool as SHELL / FILE / DATABASE / NETWORK / SAFE
-2. **Injection pattern scanning** — scans tool and prompt descriptions for 22 injection patterns
+2. **Injection pattern scanning** — scans tool and prompt descriptions for 75 injection patterns across 9 categories
 3. **Resource URI analysis** — flags sensitive paths (.env, .ssh, credentials, etc.)
 4. **High-risk ratio** — warns if >50% of tools are FILE or SHELL level
 5. **Undocumented tools** — flags tools missing descriptions
@@ -134,7 +134,7 @@ Grades: A (90+), B (75+), C (60+), D (40+), F (<40)
 ## Dependencies
 
 - [mcp](https://pypi.org/project/mcp/) — MCP protocol SDK
-- [ai-injection-guard](https://pypi.org/project/ai-injection-guard/) — 22 prompt injection detection patterns
+- [ai-injection-guard](https://pypi.org/project/ai-injection-guard/) — 75 prompt injection detection patterns across 9 categories
 
 Part of the [LuciferForge](https://github.com/LuciferForge) AI Agent Infrastructure Stack.
 
