@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Security Audit — Find vulnerabilities in your MCP servers</title>
+    <meta name="description" content="Professional security audit for MCP (Model Context Protocol) servers. Tool poisoning detection, SSRF scanning, injection testing. From the researchers who found 20 vulnerabilities in Microsoft's MCP servers.">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a2e; background: #fafafa; line-height: 1.6; }
+
+        .hero { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: white; padding: 80px 20px 60px; text-align: center; }
+        .hero h1 { font-size: 2.5rem; margin-bottom: 16px; font-weight: 800; }
+        .hero p { font-size: 1.2rem; opacity: 0.9; max-width: 600px; margin: 0 auto 32px; }
+        .hero .cred { font-size: 0.95rem; opacity: 0.7; margin-top: 24px; }
+        .hero .cred a { color: #7dd3fc; }
+
+        .container { max-width: 800px; margin: 0 auto; padding: 0 20px; }
+
+        .section { padding: 60px 20px; }
+        .section h2 { font-size: 1.8rem; margin-bottom: 24px; text-align: center; }
+
+        .findings-bar { background: #fee2e2; border-left: 4px solid #ef4444; padding: 20px 24px; border-radius: 8px; margin: 40px auto; max-width: 700px; }
+        .findings-bar strong { color: #dc2626; }
+
+        .what-you-get { background: white; }
+        .features { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 700px; margin: 0 auto; }
+        .feature { padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; }
+        .feature h3 { font-size: 1rem; margin-bottom: 8px; }
+        .feature p { font-size: 0.9rem; color: #6b7280; }
+
+        .pricing { background: #f8fafc; text-align: center; }
+        .price-cards { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; max-width: 700px; margin: 0 auto; }
+        .price-card { background: white; border: 2px solid #e5e7eb; border-radius: 12px; padding: 32px 28px; flex: 1; min-width: 280px; max-width: 340px; }
+        .price-card.featured { border-color: #6366f1; }
+        .price-card h3 { font-size: 1.2rem; margin-bottom: 8px; }
+        .price-card .price { font-size: 2.5rem; font-weight: 800; margin: 16px 0; }
+        .price-card .price span { font-size: 1rem; font-weight: 400; color: #6b7280; }
+        .price-card ul { list-style: none; text-align: left; margin: 20px 0; }
+        .price-card li { padding: 6px 0; font-size: 0.95rem; }
+        .price-card li::before { content: "✓ "; color: #22c55e; font-weight: bold; }
+
+        .cta-btn { display: inline-block; background: #6366f1; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 1.1rem; transition: background 0.2s; }
+        .cta-btn:hover { background: #4f46e5; }
+        .cta-btn.secondary { background: white; color: #6366f1; border: 2px solid #6366f1; }
+        .cta-btn.secondary:hover { background: #f5f3ff; }
+
+        .how-it-works { background: white; }
+        .steps { max-width: 600px; margin: 0 auto; }
+        .step { display: flex; gap: 16px; margin-bottom: 24px; }
+        .step-num { background: #6366f1; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; }
+        .step-text h3 { font-size: 1rem; margin-bottom: 4px; }
+        .step-text p { font-size: 0.9rem; color: #6b7280; }
+
+        .proof { background: #f8fafc; }
+        .proof-items { max-width: 600px; margin: 0 auto; }
+        .proof-item { padding: 16px 0; border-bottom: 1px solid #e5e7eb; }
+        .proof-item:last-child { border: none; }
+        .proof-item strong { display: block; margin-bottom: 4px; }
+        .proof-item span { font-size: 0.9rem; color: #6b7280; }
+
+        .footer { background: #1a1a2e; color: #9ca3af; padding: 40px 20px; text-align: center; font-size: 0.9rem; }
+        .footer a { color: #7dd3fc; }
+
+        @media (max-width: 600px) {
+            .hero h1 { font-size: 1.8rem; }
+            .features { grid-template-columns: 1fr; }
+            .price-cards { flex-direction: column; align-items: center; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="hero">
+    <div class="container">
+        <h1>Is your MCP server secure?</h1>
+        <p>Professional security audit for Model Context Protocol servers. Tool poisoning, SSRF, injection, and compliance — checked in one scan.</p>
+        <a href="#pricing" class="cta-btn">Get Your Audit Report →</a>
+        <p class="cred">From the researchers who <a href="https://dev.to/manja316/i-audited-microsofts-mcp-servers-and-found-20-vulnerabilities-139e">found 20 vulnerabilities in Microsoft's MCP servers</a></p>
+    </div>
+</div>
+
+<div class="findings-bar">
+    <div class="container">
+        <strong>We scanned 50 of the most popular MCP servers.</strong> 9 had security findings. Yours might too.
+    </div>
+</div>
+
+<div class="section what-you-get">
+    <div class="container">
+        <h2>What You Get</h2>
+        <div class="features">
+            <div class="feature">
+                <h3>🔍 Tool Description Analysis</h3>
+                <p>Every tool scanned for poisoning indicators — hidden instructions, zero-width characters, cross-server manipulation.</p>
+            </div>
+            <div class="feature">
+                <h3>🛡️ Injection Testing</h3>
+                <p>SQL injection, command injection, path traversal, SSRF — tested against every tool parameter.</p>
+            </div>
+            <div class="feature">
+                <h3>📊 Risk Score</h3>
+                <p>0-100 risk score with industry benchmark comparison. Know where you stand vs. other MCP servers.</p>
+            </div>
+            <div class="feature">
+                <h3>🔧 Fix Guidance</h3>
+                <p>Specific remediation for each finding — code-level fixes, not generic advice.</p>
+            </div>
+            <div class="feature">
+                <h3>📋 Compliance Check</h3>
+                <p>EU AI Act readiness assessment for your MCP tool descriptions and data handling.</p>
+            </div>
+            <div class="feature">
+                <h3>📄 Professional Report</h3>
+                <p>Shareable PDF report for your team, management, or compliance documentation.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section how-it-works">
+    <div class="container">
+        <h2>How It Works</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-text">
+                    <h3>Submit your repo</h3>
+                    <p>Paste your MCP server's GitHub URL after checkout.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-text">
+                    <h3>We scan it</h3>
+                    <p>Static analysis of every tool definition, parameter, and description. No code execution — read-only.</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-text">
+                    <h3>Get your report</h3>
+                    <p>Delivered to your email within 24 hours. Risk score, findings, fixes, benchmarks.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section pricing" id="pricing">
+    <div class="container">
+        <h2>Pricing</h2>
+        <div class="price-cards">
+            <div class="price-card featured">
+                <h3>Single Audit</h3>
+                <div class="price">$29</div>
+                <ul>
+                    <li>Full security scan of one MCP server</li>
+                    <li>Tool-by-tool analysis</li>
+                    <li>Risk score with benchmarks</li>
+                    <li>Code-level fix guidance</li>
+                    <li>Compliance checklist</li>
+                    <li>PDF report delivered in 24h</li>
+                </ul>
+                <a href="mailto:LuciferForge@proton.me?subject=MCP%20Security%20Audit%20-%20Single&body=GitHub%20repo%20URL%3A%20%0A%0APlease%20send%20payment%20link." class="cta-btn">Get Started →</a>
+            </div>
+            <div class="price-card">
+                <h3>Continuous</h3>
+                <div class="price">$99<span>/month</span></div>
+                <ul>
+                    <li>Everything in Single Audit</li>
+                    <li>Re-scan on every commit</li>
+                    <li>Slack/email alerts on new findings</li>
+                    <li>Monthly trend report</li>
+                    <li>Priority support</li>
+                </ul>
+                <a href="mailto:LuciferForge@proton.me?subject=MCP%20Security%20Audit%20-%20Continuous&body=GitHub%20repo%20URL%3A%20%0A%0APlease%20send%20payment%20link." class="cta-btn secondary">Contact Us →</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section proof">
+    <div class="container">
+        <h2>Track Record</h2>
+        <div class="proof-items">
+            <div class="proof-item">
+                <strong>20 vulnerabilities found in Microsoft's MCP servers</strong>
+                <span>Including CVSS 9.8 SQL injection, 7 SSRF variants, and credential theft. All reported to MSRC.</span>
+            </div>
+            <div class="proof-item">
+                <strong>Path traversal in HuggingFace Transformers</strong>
+                <span>Sharded model index allows loading files outside model directory. Reported to HuggingFace security.</span>
+            </div>
+            <div class="proof-item">
+                <strong>50+ MCP servers scanned</strong>
+                <span>Baseline security data across the most popular MCP servers in the ecosystem.</span>
+            </div>
+            <div class="proof-item">
+                <strong>Open-source tools on PyPI</strong>
+                <span><a href="https://pypi.org/project/ai-injection-guard/">ai-injection-guard</a> (300+ downloads/mo) · <a href="https://pypi.org/project/mcp-security-audit/">mcp-security-audit</a> (200+ downloads/mo)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    <div class="container">
+        <p>Built by <a href="https://github.com/LuciferForge">LuciferForge</a> · <a href="https://dev.to/manja316">Dev.to</a> · <a href="https://x.com/gmanjuu">@gmanjuu</a></p>
+        <p style="margin-top: 8px;">Questions? <a href="mailto:LuciferForge@proton.me">LuciferForge@proton.me</a></p>
+    </div>
+</div>
+
+</body>
+</html>
