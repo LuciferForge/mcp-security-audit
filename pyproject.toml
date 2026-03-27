@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-security-audit"
-version = "0.2.0"
-description = "MCP Security Auditor — scan any MCP server for injection patterns, risky tools, and misconfigurations"
+version = "0.3.0"
+description = "Security scanner for AI/ML code — 20 vulnerability patterns across Python, Java, Go, C++, Rust"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "LuciferForge" }]
-keywords = ["mcp", "security", "audit", "prompt-injection", "llm", "ai-safety"]
+keywords = ["mcp", "security", "audit", "vulnerability", "scanner", "ai-safety", "code-analysis"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -19,9 +19,11 @@ classifiers = [
     "Topic :: Security",
 ]
 dependencies = [
-    "mcp>=1.0.0",
     "ai-injection-guard>=0.1.0",
 ]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/LuciferForge/mcp-security-audit"
