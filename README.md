@@ -8,6 +8,8 @@
 
 Works as a CLI tool (`mcp-audit`) or as an MCP server itself (`mcp-security-audit`).
 
+**Why it matters:** there are now [16,000+ MCP servers](https://protodex.io) in the public ecosystem — and almost none have been security-audited. Each one runs with tool access to a shell, filesystem, or network, and a single injection-laden tool description can hijack the agent that loads it. This finds the holes before an attacker does.
+
 > **Want a professional audit report?** We found [20 vulnerabilities in Microsoft's MCP servers](https://dev.to/manja316/i-audited-microsofts-mcp-servers-and-found-20-vulnerabilities-139e). Get the same analysis for your server — [**$29 single audit**](https://luciferforge.github.io/mcp-security-audit/?utm_source=github&utm_medium=readme&utm_campaign=mcp-security-audit-2026-06-22).
 
 ---
